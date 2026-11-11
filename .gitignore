@@ -1,0 +1,16 @@
+# 虚拟环境
+venv/
+
+# 敏感文件（密钥，绝对不能提交）
+.env
+.streamlit/secrets.toml
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 日志
+*.log
+
+# 评测生成的临时结果（每次运行会重新生成，无需提交）
+eval_results/
