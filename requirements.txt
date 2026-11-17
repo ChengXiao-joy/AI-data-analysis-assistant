@@ -1,10 +1,11 @@
-streamlit>=1.30
-pandas>=2.0
-numpy>=1.24
-openpyxl>=3.1
-charset-normalizer>=3.0
-plotly>=5.18
-matplotlib>=3.7
-anthropic>=0.69
-requests>=2.25
-python-dotenv>=1.0
+# Streamlit Cloud 部署依赖（Python 3.11，版本与本地开发环境一致）
+streamlit==1.67.0
+pandas==3.1.1
+numpy==2.4.6
+openpyxl==3.1.5
+plotly==7.1.0
+matplotlib==3.11.2
+anthropic==2.6.0
+requests==2.34.2
+python-dotenv==1.2.4
+charset-normalizer==3.5.2

@@ -63,13 +63,20 @@ class AppConfig:
 
 
 def _get_secret(name: str) -> str:
-    """按优先级取密钥：环境变量 → Streamlit secrets → secrets.toml。"""
-    val = os.environ.get(name, "").strip()
-    if val:
-        return val
+    """按优先级取密钥：Streamlit secrets（云端）→ 环境变量（本地 .env）→ secrets.toml 文件。
+
+    Streamlit Cloud 部署时，密钥放在云端 Secrets（st.secrets 读取），本地 .env 不会上传；
+    本地开发时，.env 由 load_dotenv 写入环境变量，这里同样能读到。
+    """
+    # 1) Streamlit Secrets：云端后台配置；本地也可用 .streamlit/secrets.toml
     val = _read_streamlit_secret(name)
     if val:
         return val
+    # 2) 环境变量（本地 .env 由 load_dotenv 写入）
+    val = os.environ.get(name, "").strip()
+    if val:
+        return val
+    # 3) 直接解析 .streamlit/secrets.toml（纯 Python 脚本/自检时使用）
     return _read_secrets_toml(name)
 
 

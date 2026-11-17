@@ -25,6 +25,7 @@ import config
 import state
 from errors import friendly_message, execution_message
 from llm import llm_generate, LLMError
+from llm.deepseek_provider import DeepSeekProvider
 from modules import code_validate
 from modules.data_quality import _classify_dtype, index_from_one
 
@@ -198,11 +199,28 @@ def _format_result_for_interpretation(result, kind: str) -> str:
     return text
 
 
-def _generate_interpretation(question: str, result, result_kind: str) -> str:
+def _effective_api_key() -> str:
+    """有效 Key：页面输入框优先，其次 Secrets/环境变量里的 DEEPSEEK_API_KEY。"""
+    page_key = (st.session_state.get("qa_api_key", "") or "").strip()
+    if page_key:
+        return page_key
+    return config.CONFIG.deepseek_key()
+
+
+def _make_provider():
+    """用有效 Key（页面 > Secrets）创建 DeepSeek provider。"""
+    return DeepSeekProvider(
+        api_key=_effective_api_key(),
+        model=config.CONFIG.deepseek_model,
+        base_url=config.CONFIG.deepseek_base_url,
+    )
+
+
+def _generate_interpretation(question: str, result, result_kind: str, provider) -> str:
     """第二次调用大模型：基于「已算好的统计结果」生成业务解读 & 推测。"""
     facts = _format_result_for_interpretation(result, result_kind)
     prompt = f"用户问题：{question}\n\n计算得到的统计结果：\n{facts}"
-    return llm_generate(prompt=prompt, system=_INTERP_SYSTEM_PROMPT, max_tokens=1024)
+    return llm_generate(prompt=prompt, system=_INTERP_SYSTEM_PROMPT, max_tokens=1024, provider=provider)
 
 
 def _render_speculation_section(text, error) -> None:
@@ -249,10 +267,12 @@ def _handle_question(question: str, speculation_enabled: bool) -> None:
         # 阶段 1：大模型生成代码
         status.update(label="🤔 大模型正在思考、生成 pandas 代码…（一般 5~20 秒，请稍候）", state="running")
         try:
+            provider = _make_provider()  # 页面 Key > Secrets 的有效 Key
             raw_code = llm_generate(
                 prompt=_build_prompt(df, question),
                 system=_SYSTEM_PROMPT,
                 max_tokens=4096,
+                provider=provider,
             )
         except LLMError as e:
             status.update(label="❌ 生成失败", state="error")
@@ -292,7 +312,7 @@ def _handle_question(question: str, speculation_enabled: bool) -> None:
                         status.update(label="💡 正在生成业务推测…", state="running")
                         try:
                             interpretation = _generate_interpretation(
-                                question, result, _classify_result(result)
+                                question, result, _classify_result(result), provider
                             )
                         except LLMError as e:
                             interp_error = str(e)
@@ -388,14 +408,24 @@ def render() -> None:
     st.subheader("智能问答分析")
     st.markdown(_CHAT_CSS, unsafe_allow_html=True)
 
+    # —— API Key 设置（页面输入 > Secrets；本地/云端通用）——
+    with st.expander("🔑 API Key 设置", expanded=False):
+        st.text_input(
+            "DeepSeek API Key（留空则使用 Secrets 里的 DEEPSEEK_API_KEY）",
+            type="password",
+            key="qa_api_key",
+            help="Key 仅保存在当前会话内存，不会写入文件、不会上传仓库。",
+        )
+        st.caption("优先级：此处输入的 Key > Streamlit Secrets 里的 DEEPSEEK_API_KEY")
+
     has_data = state.has_dataset()
-    has_key = bool(config.CONFIG.deepseek_key())
+    has_key = bool(_effective_api_key())
 
     # —— 前置检查提示 ——
     if not has_data:
         st.warning("请先上传/载入示例数据")
     elif not has_key:
-        st.warning("请配置 API Key 后使用问答功能")
+        st.warning("请配置 API Key 后使用问答功能（展开上方「🔑 API Key 设置」粘贴 Key，或在 Secrets 里配置）")
 
     # —— 顶栏：清空对话 + 业务推测开关 ——
     col_clear, col_toggle = st.columns([1, 2])

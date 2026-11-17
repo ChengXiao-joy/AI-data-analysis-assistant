@@ -16,8 +16,9 @@ class DeepSeekProvider(LLMProvider):
                  base_url: str = "https://api.deepseek.com"):
         if not api_key:
             raise LLMError(
-                "未配置 DEEPSEEK_API_KEY。请在项目根目录 .env 文件中添加：\n"
-                "DEEPSEEK_API_KEY=你的key"
+                "未配置 DeepSeek API Key。请二选一：\n"
+                "1) 在「智能问答」页顶部展开「🔑 API Key 设置」，粘贴你的 Key；\n"
+                "2) 在 Streamlit Cloud 的 Secrets 里配置 DEEPSEEK_API_KEY（本地则在 .env 里配置）。"
             )
         self.api_key = api_key
         self.model = model
@@ -41,6 +42,8 @@ class DeepSeekProvider(LLMProvider):
         # 发请求（json= 会自动把中文安全地转成 UTF-8）
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=60)
+        except requests.exceptions.Timeout:
+            raise LLMError("请求超时：网络较慢或 DeepSeek 服务繁忙，请稍后重试。")
         except requests.RequestException as e:
             raise LLMError(f"DeepSeek 接口连接失败：{e}")
 
